@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "startupdialog.h"
 
 #include <QApplication>
 #include <QLocale>
@@ -17,7 +18,12 @@ int main(int argc, char *argv[])
             break;
         }
     }
-    MainWindow w;
+
+    StartupDialog startupDialog;
+    if (startupDialog.exec() != QDialog::Accepted)
+        return 0;
+
+    MainWindow w(startupDialog.selectedPatterns());
     w.show();
     return QApplication::exec();
 }
