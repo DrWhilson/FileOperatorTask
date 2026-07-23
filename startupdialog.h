@@ -6,6 +6,8 @@
 
 class QLineEdit;
 class QListWidget;
+class QLabel;
+class QPushButton;
 
 class StartupDialog : public QDialog
 {
@@ -16,15 +18,22 @@ public:
     ~StartupDialog() override;
 
     QStringList selectedPatterns() const;
+    QString selectedDirectory() const;
 
 private slots:
     void addPattern();
     void removeSelected();
+    void browseDirectory();
 
 private:
+    void updateStartButton();
+
     QLineEdit *m_input;
     QListWidget *m_list;
+    QLabel *m_dirLabel;
+    QPushButton *m_startBtn;
     QStringList m_patterns;
+    QString m_directory;
 };
 
 #endif

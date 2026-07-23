@@ -14,11 +14,12 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(const QStringList &patterns, QWidget *parent = nullptr);
+    explicit MainWindow(const QStringList &patterns, const QString &directory, QWidget *parent = nullptr);
     ~MainWindow() override;
 
 private:
     Ui::MainWindow *ui;
     QStringList m_patterns;
+    QString m_directory;
 };
 #endif // MAINWINDOW_H

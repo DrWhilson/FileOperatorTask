@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
     if (startupDialog.exec() != QDialog::Accepted)
         return 0;
 
-    MainWindow w(startupDialog.selectedPatterns());
+    MainWindow w(startupDialog.selectedPatterns(), startupDialog.selectedDirectory());
     w.show();
     return QApplication::exec();
 }
