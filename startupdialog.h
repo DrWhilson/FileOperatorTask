@@ -17,22 +17,27 @@ public:
     explicit StartupDialog(QWidget *parent = nullptr);
     ~StartupDialog() override;
 
-    QStringList selectedPatterns() const;
+    QStringList selectedFiles() const;
     QString selectedDirectory() const;
 
 private slots:
-    void addPattern();
-    void removeSelected();
     void browseDirectory();
+    void addPattern();
+    void removePattern();
+    void clearAll();
 
 private:
+    void scanFiles();
     void updateStartButton();
 
-    QLineEdit *m_input;
-    QListWidget *m_list;
+    QLineEdit *m_patternInput;
+    QListWidget *m_patternList;
+    QListWidget *m_fileList;
     QLabel *m_dirLabel;
     QPushButton *m_startBtn;
+
     QStringList m_patterns;
+    QStringList m_files;
     QString m_directory;
 };
 

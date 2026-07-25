@@ -16,7 +16,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(const QStringList &patterns, const QString &directory, QWidget *parent = nullptr);
+    explicit MainWindow(const QStringList &filePaths, const QString &baseDir, QWidget *parent = nullptr);
     ~MainWindow() override;
 
 protected:
@@ -28,7 +28,7 @@ private:
 
     Ui::MainWindow *ui;
     QTableWidget *m_table;
-    QStringList m_patterns;
-    QString m_directory;
+    QStringList m_filePaths;
+    QString m_baseDir;
 };
 #endif // MAINWINDOW_H

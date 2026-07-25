@@ -3,20 +3,17 @@
 
 #include <QVBoxLayout>
 #include <QHeaderView>
-#include <QDir>
 #include <QFileInfo>
-#include <QLocale>
-#include <QLabel>
 
-MainWindow::MainWindow(const QStringList &patterns, const QString &directory, QWidget *parent)
+MainWindow::MainWindow(const QStringList &filePaths, const QString &baseDir, QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , m_patterns(patterns)
-    , m_directory(directory)
+    , m_filePaths(filePaths)
+    , m_baseDir(baseDir)
 {
     ui->setupUi(this);
 
-    setWindowTitle(tr("FileOperatorTask — %1").arg(m_directory));
+    setWindowTitle(tr("FileOperatorTask — %1").arg(m_baseDir));
     resize(900, 600);
 
     auto *centralLayout = new QVBoxLayout(ui->centralwidget);
@@ -51,34 +48,9 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 
 void MainWindow::populateFileList()
 {
-    QStringList specificFiles;
-    QStringList masks;
-
-    for (const QString &p : m_patterns) {
-        if (p.contains('*'))
-            masks.append(p);
-        else
-            specificFiles.append(p);
-    }
-
-    QDir dir(m_directory);
-    if (!dir.exists())
-        return;
-
-    QStringList fileNames;
-    if (!masks.isEmpty())
-        fileNames = dir.entryList(masks, QDir::Files, QDir::Name);
-
-    for (const QString &name : specificFiles) {
-        if (dir.exists(name)) {
-            if (!fileNames.contains(name))
-                fileNames.append(name);
-        }
-    }
-
-    m_table->setRowCount(fileNames.size());
-    for (int i = 0; i < fileNames.size(); ++i) {
-        QFileInfo fi(dir.absoluteFilePath(fileNames[i]));
+    m_table->setRowCount(m_filePaths.size());
+    for (int i = 0; i < m_filePaths.size(); ++i) {
+        QFileInfo fi(m_filePaths[i]);
 
         auto *pathItem = new QTableWidgetItem(fi.absoluteFilePath());
         pathItem->setToolTip(fi.absoluteFilePath());
@@ -94,7 +66,7 @@ void MainWindow::populateFileList()
         m_table->setItem(i, 2, dateItem);
     }
 
-    statusBar()->showMessage(tr("Найдено файлов: %1").arg(fileNames.size()));
+    statusBar()->showMessage(tr("Выбрано файлов: %1").arg(m_filePaths.size()));
 }
 
 QString MainWindow::formatSize(qint64 bytes)
