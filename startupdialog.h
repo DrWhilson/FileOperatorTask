@@ -5,7 +5,6 @@
 #include <QStringList>
 
 class QLineEdit;
-class QListWidget;
 class QLabel;
 class QPushButton;
 
@@ -17,24 +16,19 @@ public:
     explicit StartupDialog(QWidget *parent = nullptr);
     ~StartupDialog() override;
 
-    QStringList selectedPatterns() const;
-    QString selectedDirectory() const;
+    QStringList selectedFiles() const;
 
 private slots:
     void browseDirectory();
     void addPattern();
-    void removePattern();
-    void clearAll();
 
 private:
-    void updateStartButton();
+    QStringList scanFiles(const QStringList &patterns);
 
     QLineEdit *m_patternInput;
-    QListWidget *m_patternList;
     QLabel *m_dirLabel;
-    QPushButton *m_okBtn;
-
-    QStringList m_patterns;
+    QPushButton *m_addBtn;
+    QStringList m_files;
     QString m_directory;
 };
 

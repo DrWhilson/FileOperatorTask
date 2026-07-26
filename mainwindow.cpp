@@ -11,7 +11,6 @@
 #include <QPushButton>
 #include <QToolBar>
 #include <QAction>
-#include <QDir>
 #include <QLabel>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -106,7 +105,7 @@ void MainWindow::showAddFilesDialog()
     if (dlg.exec() != QDialog::Accepted)
         return;
 
-    QStringList newFiles = scanDirectory(dlg.selectedDirectory(), dlg.selectedPatterns());
+    const QStringList newFiles = dlg.selectedFiles();
     if (newFiles.isEmpty())
         return;
 
@@ -140,37 +139,6 @@ void MainWindow::populateFileList()
     }
 
     statusBar()->showMessage(tr("Выбрано файлов: %1").arg(m_filePaths.size()));
-}
-
-QStringList MainWindow::scanDirectory(const QString &dir, const QStringList &patterns)
-{
-    QDir directory(dir);
-    if (!directory.exists())
-        return {};
-
-    QStringList masks;
-    QStringList specific;
-    for (const QString &p : patterns) {
-        if (p.contains('*'))
-            masks.append(p);
-        else
-            specific.append(p);
-    }
-
-    QStringList found;
-    if (!masks.isEmpty())
-        found = directory.entryList(masks, QDir::Files, QDir::Name);
-
-    for (const QString &name : specific) {
-        if (directory.exists(name) && !found.contains(name))
-            found.append(name);
-    }
-
-    QStringList result;
-    for (const QString &name : found)
-        result.append(directory.absoluteFilePath(name));
-
-    return result;
 }
 
 QString MainWindow::formatSize(qint64 bytes)

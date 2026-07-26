@@ -30,7 +30,6 @@ private:
     void setupEmptyPage();
     void setupTablePage();
     void populateFileList();
-    QStringList scanDirectory(const QString &dir, const QStringList &patterns);
     static QString formatSize(qint64 bytes);
 
     Ui::MainWindow *ui;

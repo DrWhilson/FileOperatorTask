@@ -4,10 +4,10 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
-#include <QListWidget>
 #include <QPushButton>
-#include <QDialogButtonBox>
 #include <QFileDialog>
+#include <QDir>
+#include <QFileInfo>
 
 StartupDialog::StartupDialog(QWidget *parent)
     : QDialog(parent)
@@ -38,51 +38,31 @@ StartupDialog::StartupDialog(QWidget *parent)
     m_patternInput = new QLineEdit();
     m_patternInput->setPlaceholderText("*.txt, *.bin, test.bin");
     inputLayout->addWidget(m_patternInput);
-    auto *addBtn = new QPushButton(tr("Добавить"));
-    inputLayout->addWidget(addBtn);
+    m_addBtn = new QPushButton(tr("Добавить"));
+    m_addBtn->setEnabled(false);
+    inputLayout->addWidget(m_addBtn);
     mainLayout->addLayout(inputLayout);
 
-    m_patternList = new QListWidget();
-    m_patternList->setMaximumHeight(120);
-    mainLayout->addWidget(m_patternList);
-
-    auto *patternBtnLayout = new QHBoxLayout();
-    auto *removeBtn = new QPushButton(tr("Удалить"));
-    auto *clearAllBtn = new QPushButton(tr("Очистить всё"));
-    patternBtnLayout->addWidget(removeBtn);
-    patternBtnLayout->addWidget(clearAllBtn);
-    mainLayout->addLayout(patternBtnLayout);
-
-    auto *buttonBox = new QDialogButtonBox();
-    m_okBtn = buttonBox->addButton(tr("OK"), QDialogButtonBox::AcceptRole);
-    m_okBtn->setEnabled(false);
-    buttonBox->addButton(tr("Отмена"), QDialogButtonBox::RejectRole);
-    mainLayout->addWidget(buttonBox);
+    auto *cancelLayout = new QHBoxLayout();
+    cancelLayout->addStretch();
+    auto *cancelBtn = new QPushButton(tr("Отмена"));
+    cancelLayout->addWidget(cancelBtn);
+    mainLayout->addLayout(cancelLayout);
 
     connect(browseBtn, &QPushButton::clicked, this, &StartupDialog::browseDirectory);
-    connect(addBtn, &QPushButton::clicked, this, &StartupDialog::addPattern);
-    connect(removeBtn, &QPushButton::clicked, this, &StartupDialog::removePattern);
-    connect(clearAllBtn, &QPushButton::clicked, this, &StartupDialog::clearAll);
+    connect(m_addBtn, &QPushButton::clicked, this, &StartupDialog::addPattern);
+    connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     connect(m_patternInput, &QLineEdit::returnPressed, this, &StartupDialog::addPattern);
-    connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(m_patternInput, &QLineEdit::textChanged, this, [this]() {
+        m_addBtn->setEnabled(!m_directory.isEmpty() && !m_patternInput->text().trimmed().isEmpty());
+    });
 }
 
 StartupDialog::~StartupDialog() = default;
 
-QStringList StartupDialog::selectedPatterns() const
+QStringList StartupDialog::selectedFiles() const
 {
-    return m_patterns;
-}
-
-QString StartupDialog::selectedDirectory() const
-{
-    return m_directory;
-}
-
-void StartupDialog::updateStartButton()
-{
-    m_okBtn->setEnabled(!m_directory.isEmpty() && !m_patterns.isEmpty());
+    return m_files;
 }
 
 void StartupDialog::browseDirectory()
@@ -96,42 +76,60 @@ void StartupDialog::browseDirectory()
     m_directory = dir;
     m_dirLabel->setText(dir);
     m_dirLabel->setStyleSheet("color: black;");
-    updateStartButton();
+    m_addBtn->setEnabled(!m_patternInput->text().trimmed().isEmpty());
 }
 
 void StartupDialog::addPattern()
 {
+    if (m_directory.isEmpty())
+        return;
+
     QString text = m_patternInput->text().trimmed();
     if (text.isEmpty())
         return;
 
     const QStringList parts = text.split(',', Qt::SkipEmptyParts);
+    QStringList patterns;
     for (const QString &part : parts) {
         const QString trimmed = part.trimmed();
-        if (trimmed.isEmpty())
-            continue;
-        if (m_patterns.contains(trimmed))
-            continue;
-        m_patterns.append(trimmed);
-        m_patternList->addItem(trimmed);
+        if (!trimmed.isEmpty())
+            patterns.append(trimmed);
     }
-    m_patternInput->clear();
-    updateStartButton();
+
+    if (patterns.isEmpty())
+        return;
+
+    m_files = scanFiles(patterns);
+    accept();
 }
 
-void StartupDialog::removePattern()
+QStringList StartupDialog::scanFiles(const QStringList &patterns)
 {
-    auto items = m_patternList->selectedItems();
-    for (auto *item : items) {
-        m_patterns.removeAll(item->text());
-        delete item;
-    }
-    updateStartButton();
-}
+    QDir dir(m_directory);
+    if (!dir.exists())
+        return {};
 
-void StartupDialog::clearAll()
-{
-    m_patterns.clear();
-    m_patternList->clear();
-    updateStartButton();
+    QStringList masks;
+    QStringList specific;
+    for (const QString &p : patterns) {
+        if (p.contains('*'))
+            masks.append(p);
+        else
+            specific.append(p);
+    }
+
+    QStringList found;
+    if (!masks.isEmpty())
+        found = dir.entryList(masks, QDir::Files, QDir::Name);
+
+    for (const QString &name : specific) {
+        if (dir.exists(name) && !found.contains(name))
+            found.append(name);
+    }
+
+    QStringList result;
+    for (const QString &name : found)
+        result.append(dir.absoluteFilePath(name));
+
+    return result;
 }
