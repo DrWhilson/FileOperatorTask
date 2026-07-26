@@ -1,24 +1,88 @@
 #include "mainwindow.h"
+#include "startupdialog.h"
 #include "./ui_mainwindow.h"
 
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QFileInfo>
+#include <QTableWidget>
+#include <QStackedWidget>
+#include <QPushButton>
+#include <QToolBar>
+#include <QAction>
+#include <QDir>
+#include <QLabel>
 
-MainWindow::MainWindow(const QStringList &filePaths, const QString &baseDir, QWidget *parent)
+MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , m_filePaths(filePaths)
-    , m_baseDir(baseDir)
 {
     ui->setupUi(this);
 
-    setWindowTitle(tr("FileOperatorTask — %1").arg(m_baseDir));
+    setWindowTitle(tr("FileOperatorTask"));
     resize(900, 600);
 
-    auto *centralLayout = new QVBoxLayout(ui->centralwidget);
+    m_toolbar = addToolBar(tr("Инструменты"));
+    m_toolbar->setMovable(false);
+    auto *addAction = m_toolbar->addAction(tr("➕ Добавить файлы"));
+    connect(addAction, &QAction::triggered, this, &MainWindow::showAddFilesDialog);
 
-    m_table = new QTableWidget(0, 3, this);
+    m_stack = new QStackedWidget();
+    setCentralWidget(m_stack);
+
+    setupEmptyPage();
+    setupTablePage();
+
+    m_stack->setCurrentIndex(0);
+}
+
+MainWindow::~MainWindow()
+{
+    delete ui;
+}
+
+void MainWindow::setupEmptyPage()
+{
+    auto *page = new QWidget();
+    auto *layout = new QVBoxLayout(page);
+
+    layout->addStretch();
+
+    auto *iconLabel = new QLabel(tr("📂"));
+    iconLabel->setAlignment(Qt::AlignCenter);
+    QFont iconFont = iconLabel->font();
+    iconFont.setPointSize(48);
+    iconLabel->setFont(iconFont);
+    layout->addWidget(iconLabel);
+
+    auto *textLabel = new QLabel(tr("Нет выбранных файлов"));
+    textLabel->setAlignment(Qt::AlignCenter);
+    textLabel->setStyleSheet("color: gray; font-size: 16px;");
+    layout->addWidget(textLabel);
+
+    auto *btn = new QPushButton(tr("➕ Добавить файлы"));
+    btn->setFixedSize(200, 40);
+    auto *btnLayout = new QHBoxLayout();
+    btnLayout->addStretch();
+    btnLayout->addWidget(btn);
+    btnLayout->addStretch();
+    layout->addLayout(btnLayout);
+
+    layout->addStretch();
+
+    connect(btn, &QPushButton::clicked, this, &MainWindow::showAddFilesDialog);
+
+    m_stack->addWidget(page);
+}
+
+void MainWindow::setupTablePage()
+{
+    auto *page = new QWidget();
+    auto *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+
+    m_table = new QTableWidget(0, 3);
     m_table->setHorizontalHeaderLabels({tr("Файл"), tr("Размер"), tr("Дата изменения")});
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -31,19 +95,28 @@ MainWindow::MainWindow(const QStringList &filePaths, const QString &baseDir, QWi
     header->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     header->setSectionResizeMode(2, QHeaderView::ResizeToContents);
 
-    centralLayout->addWidget(m_table);
+    layout->addWidget(m_table);
+
+    m_stack->addWidget(page);
+}
+
+void MainWindow::showAddFilesDialog()
+{
+    StartupDialog dlg(this);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    QStringList newFiles = scanDirectory(dlg.selectedDirectory(), dlg.selectedPatterns());
+    if (newFiles.isEmpty())
+        return;
+
+    for (const QString &f : newFiles) {
+        if (!m_filePaths.contains(f))
+            m_filePaths.append(f);
+    }
 
     populateFileList();
-}
-
-MainWindow::~MainWindow()
-{
-    delete ui;
-}
-
-void MainWindow::resizeEvent(QResizeEvent *event)
-{
-    QMainWindow::resizeEvent(event);
+    m_stack->setCurrentIndex(1);
 }
 
 void MainWindow::populateFileList()
@@ -67,6 +140,37 @@ void MainWindow::populateFileList()
     }
 
     statusBar()->showMessage(tr("Выбрано файлов: %1").arg(m_filePaths.size()));
+}
+
+QStringList MainWindow::scanDirectory(const QString &dir, const QStringList &patterns)
+{
+    QDir directory(dir);
+    if (!directory.exists())
+        return {};
+
+    QStringList masks;
+    QStringList specific;
+    for (const QString &p : patterns) {
+        if (p.contains('*'))
+            masks.append(p);
+        else
+            specific.append(p);
+    }
+
+    QStringList found;
+    if (!masks.isEmpty())
+        found = directory.entryList(masks, QDir::Files, QDir::Name);
+
+    for (const QString &name : specific) {
+        if (directory.exists(name) && !found.contains(name))
+            found.append(name);
+    }
+
+    QStringList result;
+    for (const QString &name : found)
+        result.append(directory.absoluteFilePath(name));
+
+    return result;
 }
 
 QString MainWindow::formatSize(qint64 bytes)

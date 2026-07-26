@@ -3,7 +3,11 @@
 
 #include <QMainWindow>
 #include <QStringList>
-#include <QTableWidget>
+
+class QTableWidget;
+class QStackedWidget;
+class QPushButton;
+class QToolBar;
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -16,19 +20,23 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(const QStringList &filePaths, const QString &baseDir, QWidget *parent = nullptr);
+    explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
 
-protected:
-    void resizeEvent(QResizeEvent *event) override;
+private slots:
+    void showAddFilesDialog();
 
 private:
+    void setupEmptyPage();
+    void setupTablePage();
     void populateFileList();
+    QStringList scanDirectory(const QString &dir, const QStringList &patterns);
     static QString formatSize(qint64 bytes);
 
     Ui::MainWindow *ui;
+    QStackedWidget *m_stack;
     QTableWidget *m_table;
+    QToolBar *m_toolbar;
     QStringList m_filePaths;
-    QString m_baseDir;
 };
 #endif // MAINWINDOW_H

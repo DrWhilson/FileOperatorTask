@@ -8,14 +8,12 @@
 #include <QPushButton>
 #include <QDialogButtonBox>
 #include <QFileDialog>
-#include <QDir>
-#include <QFileInfo>
 
 StartupDialog::StartupDialog(QWidget *parent)
     : QDialog(parent)
 {
-    setWindowTitle(tr("FileOperatorTask — Настройка входных файлов"));
-    setMinimumWidth(550);
+    setWindowTitle(tr("Добавление файлов"));
+    setMinimumWidth(500);
 
     auto *mainLayout = new QVBoxLayout(this);
 
@@ -45,7 +43,7 @@ StartupDialog::StartupDialog(QWidget *parent)
     mainLayout->addLayout(inputLayout);
 
     m_patternList = new QListWidget();
-    m_patternList->setMaximumHeight(100);
+    m_patternList->setMaximumHeight(120);
     mainLayout->addWidget(m_patternList);
 
     auto *patternBtnLayout = new QHBoxLayout();
@@ -55,14 +53,9 @@ StartupDialog::StartupDialog(QWidget *parent)
     patternBtnLayout->addWidget(clearAllBtn);
     mainLayout->addLayout(patternBtnLayout);
 
-    mainLayout->addWidget(new QLabel(tr("Найденные файлы:")));
-
-    m_fileList = new QListWidget();
-    mainLayout->addWidget(m_fileList);
-
     auto *buttonBox = new QDialogButtonBox();
-    m_startBtn = buttonBox->addButton(tr("Начать обработку"), QDialogButtonBox::AcceptRole);
-    m_startBtn->setEnabled(false);
+    m_okBtn = buttonBox->addButton(tr("OK"), QDialogButtonBox::AcceptRole);
+    m_okBtn->setEnabled(false);
     buttonBox->addButton(tr("Отмена"), QDialogButtonBox::RejectRole);
     mainLayout->addWidget(buttonBox);
 
@@ -77,9 +70,9 @@ StartupDialog::StartupDialog(QWidget *parent)
 
 StartupDialog::~StartupDialog() = default;
 
-QStringList StartupDialog::selectedFiles() const
+QStringList StartupDialog::selectedPatterns() const
 {
-    return m_files;
+    return m_patterns;
 }
 
 QString StartupDialog::selectedDirectory() const
@@ -89,7 +82,7 @@ QString StartupDialog::selectedDirectory() const
 
 void StartupDialog::updateStartButton()
 {
-    m_startBtn->setEnabled(!m_directory.isEmpty() && !m_files.isEmpty());
+    m_okBtn->setEnabled(!m_directory.isEmpty() && !m_patterns.isEmpty());
 }
 
 void StartupDialog::browseDirectory()
@@ -103,7 +96,7 @@ void StartupDialog::browseDirectory()
     m_directory = dir;
     m_dirLabel->setText(dir);
     m_dirLabel->setStyleSheet("color: black;");
-    scanFiles();
+    updateStartButton();
 }
 
 void StartupDialog::addPattern()
@@ -123,7 +116,7 @@ void StartupDialog::addPattern()
         m_patternList->addItem(trimmed);
     }
     m_patternInput->clear();
-    scanFiles();
+    updateStartButton();
 }
 
 void StartupDialog::removePattern()
@@ -133,55 +126,12 @@ void StartupDialog::removePattern()
         m_patterns.removeAll(item->text());
         delete item;
     }
-    scanFiles();
+    updateStartButton();
 }
 
 void StartupDialog::clearAll()
 {
     m_patterns.clear();
     m_patternList->clear();
-    scanFiles();
-}
-
-void StartupDialog::scanFiles()
-{
-    m_files.clear();
-    m_fileList->clear();
-
-    if (m_directory.isEmpty() || m_patterns.isEmpty()) {
-        updateStartButton();
-        return;
-    }
-
-    QDir dir(m_directory);
-    if (!dir.exists()) {
-        updateStartButton();
-        return;
-    }
-
-    QStringList masks;
-    QStringList specific;
-    for (const QString &p : m_patterns) {
-        if (p.contains('*'))
-            masks.append(p);
-        else
-            specific.append(p);
-    }
-
-    QStringList found;
-    if (!masks.isEmpty())
-        found = dir.entryList(masks, QDir::Files, QDir::Name);
-
-    for (const QString &name : specific) {
-        if (dir.exists(name) && !found.contains(name))
-            found.append(name);
-    }
-
-    for (const QString &name : found) {
-        QString fullPath = dir.absoluteFilePath(name);
-        m_files.append(fullPath);
-        m_fileList->addItem(fullPath);
-    }
-
     updateStartButton();
 }

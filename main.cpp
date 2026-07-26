@@ -1,5 +1,4 @@
 #include "mainwindow.h"
-#include "startupdialog.h"
 
 #include <QApplication>
 #include <QLocale>
@@ -19,11 +18,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    StartupDialog startupDialog;
-    if (startupDialog.exec() != QDialog::Accepted)
-        return 0;
-
-    MainWindow w(startupDialog.selectedFiles(), startupDialog.selectedDirectory());
+    MainWindow w;
     w.show();
     return QApplication::exec();
 }
