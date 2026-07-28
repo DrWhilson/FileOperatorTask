@@ -8,6 +8,7 @@ class QTableWidget;
 class QStackedWidget;
 class QPushButton;
 class QToolBar;
+class QAction;
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -26,6 +27,7 @@ public:
 private slots:
     void showAddFilesDialog();
     void removeSelectedFiles();
+    void showSettingsDialog();
 
 private:
     void setupEmptyPage();
@@ -38,6 +40,8 @@ private:
     QTableWidget *m_table;
     QToolBar *m_toolbar;
     QAction *m_removeAction;
+    QAction *m_settingsAction;
+    bool m_deleteAfterProcessing;
     QStringList m_filePaths;
 };
 #endif // MAINWINDOW_H

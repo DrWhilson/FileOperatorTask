@@ -21,6 +21,8 @@ set(PROJECT_SOURCES
         mainwindow.ui
         startupdialog.cpp
         startupdialog.h
+        settingsdialog.cpp
+        settingsdialog.h
         ${TS_FILES}
 )
 

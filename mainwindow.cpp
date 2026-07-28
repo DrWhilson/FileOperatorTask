@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "startupdialog.h"
+#include "settingsdialog.h"
 #include "./ui_mainwindow.h"
 
 #include <QVBoxLayout>
@@ -12,12 +13,16 @@
 #include <QToolBar>
 #include <QAction>
 #include <QLabel>
+#include <QSettings>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , m_deleteAfterProcessing(false)
 {
     ui->setupUi(this);
+
+    m_deleteAfterProcessing = QSettings().value("settings/deleteAfterProcessing", false).toBool();
 
     setWindowTitle(tr("FileOperatorTask"));
     resize(900, 600);
@@ -30,6 +35,11 @@ MainWindow::MainWindow(QWidget *parent)
     m_removeAction = m_toolbar->addAction(tr("🗑 Удалить"));
     m_removeAction->setEnabled(false);
     connect(m_removeAction, &QAction::triggered, this, &MainWindow::removeSelectedFiles);
+
+    m_toolbar->addSeparator();
+
+    m_settingsAction = m_toolbar->addAction(tr("⚙ Настройки"));
+    connect(m_settingsAction, &QAction::triggered, this, &MainWindow::showSettingsDialog);
 
     m_stack = new QStackedWidget();
     setCentralWidget(m_stack);
@@ -141,6 +151,16 @@ void MainWindow::removeSelectedFiles()
     } else {
         populateFileList();
     }
+}
+
+void MainWindow::showSettingsDialog()
+{
+    SettingsDialog dlg(m_deleteAfterProcessing, this);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    m_deleteAfterProcessing = dlg.deleteAfterProcessing();
+    QSettings().setValue("settings/deleteAfterProcessing", m_deleteAfterProcessing);
 }
 
 void MainWindow::populateFileList()
