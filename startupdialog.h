@@ -22,15 +22,16 @@ public:
     // Возвращает абсолютные пути к файлам, отобранным по маскам
     QStringList selectedFiles() const;
 
+    // Сканирование директории по переданным паттернам.
+    // Паттерны делятся на маски (с '*') и точные имена файлов.
+    static QStringList scanFiles(const QString &directory, const QStringList &patterns);
+
 private slots:
     void browseDirectory();
     // Обрабатывает ввод маски: разбивает по запятым, запускает сканирование
     void addPattern();
 
 private:
-    // Сканирует директорию, применяя список масок/имён файлов
-    QStringList scanFiles(const QStringList &patterns);
-
     QLineEdit *m_patternInput;    // поле ввода масок (например "*.txt, test.bin")
     QLabel *m_dirLabel;
     QPushButton *m_addBtn;        // кнопка "Добавить" — запускает поиск по маскам

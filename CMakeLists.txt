@@ -67,6 +67,14 @@ set_target_properties(FileOperatorTask PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
+option(BUILD_TESTS "Build tests" ON)
+
+if(BUILD_TESTS)
+    enable_testing()
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    add_subdirectory(tests)
+endif()
+
 include(GNUInstallDirs)
 install(TARGETS FileOperatorTask
     BUNDLE DESTINATION .

@@ -104,7 +104,7 @@ void StartupDialog::addPattern()
         return;
 
     // Сканируем директорию и закрываем диалог, возвращая результат
-    m_files = scanFiles(patterns);
+    m_files = scanFiles(m_directory, patterns);
     accept();
 }
 
@@ -113,9 +113,9 @@ void StartupDialog::addPattern()
 //   — маски (содержат '*'), например "*.txt"  — применяются через QDir::entryList
 //   — конкретные имена файлов, например "test.bin" — проверяются через QDir::exists
 // Результат: список абсолютных путей к найденным файлам (без дубликатов)
-QStringList StartupDialog::scanFiles(const QStringList &patterns)
+QStringList StartupDialog::scanFiles(const QString &directory, const QStringList &patterns)
 {
-    QDir dir(m_directory);
+    QDir dir(directory);
     if (!dir.exists())
         return {};
 
