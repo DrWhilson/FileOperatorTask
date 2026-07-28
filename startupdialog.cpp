@@ -79,6 +79,9 @@ void StartupDialog::browseDirectory()
     m_addBtn->setEnabled(!m_patternInput->text().trimmed().isEmpty());
 }
 
+// Обработка введённой маски.
+// Пользователь может ввести сразу несколько значений через запятую,
+// например: "*.txt, *.bin, test.bin"
 void StartupDialog::addPattern()
 {
     if (m_directory.isEmpty())
@@ -88,6 +91,7 @@ void StartupDialog::addPattern()
     if (text.isEmpty())
         return;
 
+    // Разделяем строку по запятым — получаем список отдельных масок/имён
     const QStringList parts = text.split(',', Qt::SkipEmptyParts);
     QStringList patterns;
     for (const QString &part : parts) {
@@ -99,16 +103,23 @@ void StartupDialog::addPattern()
     if (patterns.isEmpty())
         return;
 
+    // Сканируем директорию и закрываем диалог, возвращая результат
     m_files = scanFiles(patterns);
     accept();
 }
 
+// Сканирование директории по переданным паттернам.
+// Паттерны делятся на два типа:
+//   — маски (содержат '*'), например "*.txt"  — применяются через QDir::entryList
+//   — конкретные имена файлов, например "test.bin" — проверяются через QDir::exists
+// Результат: список абсолютных путей к найденным файлам (без дубликатов)
 QStringList StartupDialog::scanFiles(const QStringList &patterns)
 {
     QDir dir(m_directory);
     if (!dir.exists())
         return {};
 
+    // Разделяем паттерны на маски и конкретные имена
     QStringList masks;
     QStringList specific;
     for (const QString &p : patterns) {
@@ -118,15 +129,18 @@ QStringList StartupDialog::scanFiles(const QStringList &patterns)
             specific.append(p);
     }
 
+    // Поиск по маскам (glob-шаблоны QDir)
     QStringList found;
     if (!masks.isEmpty())
         found = dir.entryList(masks, QDir::Files, QDir::Name);
 
+    // Проверка конкретных имён файлов
     for (const QString &name : specific) {
         if (dir.exists(name) && !found.contains(name))
             found.append(name);
     }
 
+    // Преобразуем имена в абсолютные пути
     QStringList result;
     for (const QString &name : found)
         result.append(dir.absoluteFilePath(name));
