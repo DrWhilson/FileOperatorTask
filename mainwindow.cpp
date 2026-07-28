@@ -27,6 +27,10 @@ MainWindow::MainWindow(QWidget *parent)
     auto *addAction = m_toolbar->addAction(tr("➕ Добавить файлы"));
     connect(addAction, &QAction::triggered, this, &MainWindow::showAddFilesDialog);
 
+    m_removeAction = m_toolbar->addAction(tr("🗑 Удалить"));
+    m_removeAction->setEnabled(false);
+    connect(m_removeAction, &QAction::triggered, this, &MainWindow::removeSelectedFiles);
+
     m_stack = new QStackedWidget();
     setCentralWidget(m_stack);
 
@@ -96,6 +100,11 @@ void MainWindow::setupTablePage()
 
     layout->addWidget(m_table);
 
+    connect(m_table->selectionModel(), &QItemSelectionModel::selectionChanged,
+        this, [this]() {
+            m_removeAction->setEnabled(!m_table->selectedItems().isEmpty());
+        });
+
     m_stack->addWidget(page);
 }
 
@@ -116,6 +125,22 @@ void MainWindow::showAddFilesDialog()
 
     populateFileList();
     m_stack->setCurrentIndex(1);
+}
+
+void MainWindow::removeSelectedFiles()
+{
+    auto selectedRows = m_table->selectionModel()->selectedRows();
+    std::sort(selectedRows.rbegin(), selectedRows.rend());
+    for (const auto &index : selectedRows)
+        m_filePaths.removeAt(index.row());
+
+    if (m_filePaths.isEmpty()) {
+        m_stack->setCurrentIndex(0);
+        statusBar()->showMessage(tr("Файлы не выбраны"));
+        m_removeAction->setEnabled(false);
+    } else {
+        populateFileList();
+    }
 }
 
 void MainWindow::populateFileList()

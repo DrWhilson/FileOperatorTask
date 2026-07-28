@@ -25,6 +25,7 @@ public:
 
 private slots:
     void showAddFilesDialog();
+    void removeSelectedFiles();
 
 private:
     void setupEmptyPage();
@@ -36,6 +37,7 @@ private:
     QStackedWidget *m_stack;
     QTableWidget *m_table;
     QToolBar *m_toolbar;
+    QAction *m_removeAction;
     QStringList m_filePaths;
 };
 #endif // MAINWINDOW_H
