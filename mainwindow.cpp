@@ -18,11 +18,16 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , m_deleteAfterProcessing(false)
 {
     ui->setupUi(this);
 
-    m_deleteAfterProcessing = QSettings().value("settings/deleteAfterProcessing", false).toBool();
+    QSettings s;
+    m_outputPath = s.value("settings/outputPath", "").toString();
+    m_onConflictMode = s.value("settings/onConflict", "overwrite").toString();
+    m_runMode = s.value("settings/runMode", "once").toString();
+    m_pollInterval = s.value("settings/pollInterval", 5).toInt();
+    m_xorKey = s.value("settings/xorKey").toByteArray();
+    m_deleteAfterProcessing = s.value("settings/deleteAfterProcessing", false).toBool();
 
     setWindowTitle(tr("FileOperatorTask"));
     resize(900, 600);
@@ -155,12 +160,25 @@ void MainWindow::removeSelectedFiles()
 
 void MainWindow::showSettingsDialog()
 {
-    SettingsDialog dlg(m_deleteAfterProcessing, this);
+    SettingsDialog dlg(m_outputPath, m_onConflictMode, m_runMode,
+                       m_pollInterval, m_xorKey, m_deleteAfterProcessing, this);
     if (dlg.exec() != QDialog::Accepted)
         return;
 
+    m_outputPath = dlg.outputPath();
+    m_onConflictMode = dlg.onConflictMode();
+    m_runMode = dlg.runMode();
+    m_pollInterval = dlg.pollInterval();
+    m_xorKey = dlg.xorKey();
     m_deleteAfterProcessing = dlg.deleteAfterProcessing();
-    QSettings().setValue("settings/deleteAfterProcessing", m_deleteAfterProcessing);
+
+    QSettings s;
+    s.setValue("settings/outputPath", m_outputPath);
+    s.setValue("settings/onConflict", m_onConflictMode);
+    s.setValue("settings/runMode", m_runMode);
+    s.setValue("settings/pollInterval", m_pollInterval);
+    s.setValue("settings/xorKey", m_xorKey);
+    s.setValue("settings/deleteAfterProcessing", m_deleteAfterProcessing);
 }
 
 void MainWindow::populateFileList()

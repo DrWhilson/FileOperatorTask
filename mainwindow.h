@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <QStringList>
+#include <QByteArray>
 
 class QTableWidget;
 class QStackedWidget;
@@ -41,7 +42,14 @@ private:
     QToolBar *m_toolbar;
     QAction *m_removeAction;
     QAction *m_settingsAction;
-    bool m_deleteAfterProcessing;
     QStringList m_filePaths;
+
+    // Настройки (сохраняются в QSettings)
+    QString m_outputPath;
+    QString m_onConflictMode;
+    QString m_runMode;
+    int m_pollInterval;
+    QByteArray m_xorKey;
+    bool m_deleteAfterProcessing;
 };
 #endif // MAINWINDOW_H
