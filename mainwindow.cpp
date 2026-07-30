@@ -336,9 +336,8 @@ void MainWindow::startProcessing()
         m_startAction->setText(tr("⏹ Стоп"));
         statusBar()->showMessage(tr("Таймер запущен, интервал: %1 сек").arg(m_pollInterval));
 
-        // Первый запуск сразу
+        // Первый тик — сразу, остальные — по таймеру
         onPollTimer();
-        // Запускаем периодический таймер
         m_pollTimer->start(m_pollInterval * 1000);
         return;
     }
@@ -369,18 +368,10 @@ void MainWindow::onPollTimer()
         return;
 
     QStringList found = StartupDialog::scanFiles(m_lastInputDir, m_lastPatterns);
-    QStringList newFiles;
-    for (const QString &f : found) {
-        if (!m_filePaths.contains(f))
-            newFiles.append(f);
-    }
-
-    if (newFiles.isEmpty())
+    if (found.isEmpty())
         return;
 
-    for (const QString &f : newFiles)
-        m_filePaths.append(f);
-
+    m_filePaths = found;
     populateFileList();
     m_stack->setCurrentIndex(1);
 
@@ -416,6 +407,7 @@ void MainWindow::onAllCompleted()
         m_addAction->setEnabled(true);
         m_removeAction->setEnabled(!m_table->selectedItems().isEmpty());
         m_settingsAction->setEnabled(true);
+        m_startAction->setEnabled(true);
         m_pauseAction->setEnabled(false);
         statusBar()->showMessage(tr("Ожидание новых файлов..."), 3000);
     } else {
