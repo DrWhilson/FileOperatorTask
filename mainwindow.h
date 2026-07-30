@@ -12,6 +12,7 @@ class QToolBar;
 class QAction;
 class QProgressBar;
 class QThread;
+class QTimer;
 class FileProcessor;
 
 QT_BEGIN_NAMESPACE
@@ -37,6 +38,7 @@ private slots:
     void showSettingsDialog();
     void startProcessing();
     void togglePause();
+    void onPollTimer();
 
     void onFileProgress(const QString &fileName, qint64 current, qint64 total);
     void onFileCompleted(const QString &fileName);
@@ -48,6 +50,7 @@ private:
     void setupTablePage();
     void populateFileList();
     void setProcessingEnabled(bool enabled);
+    void runProcessor();
     static QString formatSize(qint64 bytes);
 
     Ui::MainWindow *ui;
@@ -60,10 +63,15 @@ private:
     QAction *m_startAction;
     QAction *m_pauseAction;
     QProgressBar *m_progressBar;
+    QTimer *m_pollTimer;
     QStringList m_filePaths;
 
     FileProcessor *m_processor;
     QThread *m_workerThread;
+
+    // Данные для таймерного режима
+    QString m_lastInputDir;
+    QStringList m_lastPatterns;
 
     // Настройки (сохраняются в QSettings)
     QString m_outputPath;

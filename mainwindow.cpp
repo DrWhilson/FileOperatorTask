@@ -17,6 +17,7 @@
 #include <QSettings>
 #include <QProgressBar>
 #include <QThread>
+#include <QTimer>
 #include <QCloseEvent>
 #include <QMessageBox>
 #include <QDir>
@@ -73,6 +74,10 @@ MainWindow::MainWindow(QWidget *parent)
     m_progressBar->setVisible(false);
     statusBar()->addPermanentWidget(m_progressBar);
 
+    // ── Таймер ─────────────────────────────────────────
+    m_pollTimer = new QTimer(this);
+    connect(m_pollTimer, &QTimer::timeout, this, &MainWindow::onPollTimer);
+
     // ── Центральный стек ───────────────────────────────
     m_stack = new QStackedWidget();
     setCentralWidget(m_stack);
@@ -85,11 +90,16 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    if (m_pollTimer->isActive())
+        m_pollTimer->stop();
     delete ui;
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+    if (m_pollTimer->isActive())
+        m_pollTimer->stop();
+
     if (m_workerThread && m_workerThread->isRunning()) {
         auto ret = QMessageBox::question(this,
             tr("Подтверждение"),
@@ -180,6 +190,10 @@ void MainWindow::showAddFilesDialog()
     if (dlg.exec() != QDialog::Accepted)
         return;
 
+    // Сохраняем директорию и паттерны для таймерного режима
+    m_lastInputDir = dlg.selectedDirectory();
+    m_lastPatterns = dlg.selectedPatterns();
+
     const QStringList newFiles = dlg.selectedFiles();
     if (newFiles.isEmpty())
         return;
@@ -236,31 +250,10 @@ void MainWindow::showSettingsDialog()
 
 // ── Обработка файлов ─────────────────────────────────
 
-void MainWindow::startProcessing()
+void MainWindow::runProcessor()
 {
     if (m_filePaths.isEmpty())
         return;
-
-    if (m_outputPath.isEmpty()) {
-        QMessageBox::warning(this, tr("Ошибка"),
-            tr("Не указан путь для сохранения результатов.\n"
-               "Задайте его в меню Настройки."));
-        return;
-    }
-
-    QDir outDir(m_outputPath);
-    if (!outDir.exists()) {
-        QMessageBox::warning(this, tr("Ошибка"),
-            tr("Указанная директория не существует:\n%1").arg(m_outputPath));
-        return;
-    }
-
-    if (m_xorKey.size() != 8) {
-        QMessageBox::warning(this, tr("Ошибка"),
-            tr("XOR-ключ должен быть 8 байт (16 hex-символов).\n"
-               "Задайте его в меню Настройки."));
-        return;
-    }
 
     setProcessingEnabled(false);
 
@@ -296,6 +289,64 @@ void MainWindow::startProcessing()
     m_workerThread->start();
 }
 
+void MainWindow::startProcessing()
+{
+    if (m_pollTimer->isActive()) {
+        // Таймерный режим — остановить
+        m_pollTimer->stop();
+        m_startAction->setText(tr("▶ Старт"));
+        if (m_processor)
+            m_processor->cancel();
+        return;
+    }
+
+    if (m_filePaths.isEmpty())
+        return;
+
+    if (m_outputPath.isEmpty()) {
+        QMessageBox::warning(this, tr("Ошибка"),
+            tr("Не указан путь для сохранения результатов.\n"
+               "Задайте его в меню Настройки."));
+        return;
+    }
+
+    QDir outDir(m_outputPath);
+    if (!outDir.exists()) {
+        QMessageBox::warning(this, tr("Ошибка"),
+            tr("Указанная директория не существует:\n%1").arg(m_outputPath));
+        return;
+    }
+
+    if (m_xorKey.size() != 8) {
+        QMessageBox::warning(this, tr("Ошибка"),
+            tr("XOR-ключ должен быть 8 байт (16 hex-символов).\n"
+               "Задайте его в меню Настройки."));
+        return;
+    }
+
+    if (m_runMode == "timer") {
+        // Таймерный режим: запускаем периодический опрос директории
+        if (m_lastInputDir.isEmpty() || m_lastPatterns.isEmpty()) {
+            QMessageBox::warning(this, tr("Ошибка"),
+                tr("Для таймерного режима сначала добавьте файлы\n"
+                   "с указанием директории и масок."));
+            return;
+        }
+
+        m_startAction->setText(tr("⏹ Стоп"));
+        statusBar()->showMessage(tr("Таймер запущен, интервал: %1 сек").arg(m_pollInterval));
+
+        // Первый запуск сразу
+        onPollTimer();
+        // Запускаем периодический таймер
+        m_pollTimer->start(m_pollInterval * 1000);
+        return;
+    }
+
+    // Однократный режим
+    runProcessor();
+}
+
 void MainWindow::togglePause()
 {
     if (!m_processor)
@@ -310,6 +361,30 @@ void MainWindow::togglePause()
         m_pauseAction->setText(tr("⏸ Пауза"));
         statusBar()->showMessage(tr("Обработка возобновлена"));
     }
+}
+
+void MainWindow::onPollTimer()
+{
+    if (m_workerThread && m_workerThread->isRunning())
+        return;
+
+    QStringList found = StartupDialog::scanFiles(m_lastInputDir, m_lastPatterns);
+    QStringList newFiles;
+    for (const QString &f : found) {
+        if (!m_filePaths.contains(f))
+            newFiles.append(f);
+    }
+
+    if (newFiles.isEmpty())
+        return;
+
+    for (const QString &f : newFiles)
+        m_filePaths.append(f);
+
+    populateFileList();
+    m_stack->setCurrentIndex(1);
+
+    runProcessor();
 }
 
 // ── Слоты прогресса ──────────────────────────────────
@@ -335,8 +410,18 @@ void MainWindow::onAllCompleted()
     m_progressBar->setValue(0);
     m_processor = nullptr;
     m_workerThread = nullptr;
-    setProcessingEnabled(true);
-    statusBar()->showMessage(tr("Обработка завершена"), 5000);
+
+    if (m_pollTimer->isActive()) {
+        // Таймер продолжает работать, ждём новых файлов
+        m_addAction->setEnabled(true);
+        m_removeAction->setEnabled(!m_table->selectedItems().isEmpty());
+        m_settingsAction->setEnabled(true);
+        m_pauseAction->setEnabled(false);
+        statusBar()->showMessage(tr("Ожидание новых файлов..."), 3000);
+    } else {
+        setProcessingEnabled(true);
+        statusBar()->showMessage(tr("Обработка завершена"), 5000);
+    }
 }
 
 void MainWindow::onProcessingError(const QString &message)

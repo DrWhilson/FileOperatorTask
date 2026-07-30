@@ -65,6 +65,16 @@ QStringList StartupDialog::selectedFiles() const
     return m_files;
 }
 
+QString StartupDialog::selectedDirectory() const
+{
+    return m_directory;
+}
+
+QStringList StartupDialog::selectedPatterns() const
+{
+    return m_patterns;
+}
+
 void StartupDialog::browseDirectory()
 {
     QString dir = QFileDialog::getExistingDirectory(this,
@@ -102,6 +112,9 @@ void StartupDialog::addPattern()
 
     if (patterns.isEmpty())
         return;
+
+    // Сохраняем паттерны и директорию для повторного использования
+    m_patterns = patterns;
 
     // Сканируем директорию и закрываем диалог, возвращая результат
     m_files = scanFiles(m_directory, patterns);
