@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "startupdialog.h"
 #include "settingsdialog.h"
+#include "fileprocessor.h"
 #include "./ui_mainwindow.h"
 
 #include <QVBoxLayout>
@@ -14,10 +15,17 @@
 #include <QAction>
 #include <QLabel>
 #include <QSettings>
+#include <QProgressBar>
+#include <QThread>
+#include <QCloseEvent>
+#include <QMessageBox>
+#include <QDir>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
+    , m_processor(nullptr)
+    , m_workerThread(nullptr)
 {
     ui->setupUi(this);
 
@@ -32,10 +40,12 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowTitle(tr("FileOperatorTask"));
     resize(900, 600);
 
+    // ── Тулбар ─────────────────────────────────────────
     m_toolbar = addToolBar(tr("Инструменты"));
     m_toolbar->setMovable(false);
-    auto *addAction = m_toolbar->addAction(tr("➕ Добавить файлы"));
-    connect(addAction, &QAction::triggered, this, &MainWindow::showAddFilesDialog);
+
+    m_addAction = m_toolbar->addAction(tr("➕ Добавить файлы"));
+    connect(m_addAction, &QAction::triggered, this, &MainWindow::showAddFilesDialog);
 
     m_removeAction = m_toolbar->addAction(tr("🗑 Удалить"));
     m_removeAction->setEnabled(false);
@@ -43,9 +53,27 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_toolbar->addSeparator();
 
+    m_startAction = m_toolbar->addAction(tr("▶ Старт"));
+    m_startAction->setEnabled(false);
+    connect(m_startAction, &QAction::triggered, this, &MainWindow::startProcessing);
+
+    m_pauseAction = m_toolbar->addAction(tr("⏸ Пауза"));
+    m_pauseAction->setEnabled(false);
+    connect(m_pauseAction, &QAction::triggered, this, &MainWindow::togglePause);
+
+    m_toolbar->addSeparator();
+
     m_settingsAction = m_toolbar->addAction(tr("⚙ Настройки"));
     connect(m_settingsAction, &QAction::triggered, this, &MainWindow::showSettingsDialog);
 
+    // ── Прогресс-бар ───────────────────────────────────
+    m_progressBar = new QProgressBar();
+    m_progressBar->setRange(0, 100);
+    m_progressBar->setValue(0);
+    m_progressBar->setVisible(false);
+    statusBar()->addPermanentWidget(m_progressBar);
+
+    // ── Центральный стек ───────────────────────────────
     m_stack = new QStackedWidget();
     setCentralWidget(m_stack);
 
@@ -59,6 +87,27 @@ MainWindow::~MainWindow()
 {
     delete ui;
 }
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    if (m_workerThread && m_workerThread->isRunning()) {
+        auto ret = QMessageBox::question(this,
+            tr("Подтверждение"),
+            tr("Идёт обработка файлов. Завершить?"),
+            QMessageBox::Yes | QMessageBox::No);
+        if (ret == QMessageBox::No) {
+            event->ignore();
+            return;
+        }
+        if (m_processor)
+            m_processor->cancel();
+        m_workerThread->quit();
+        m_workerThread->wait(5000);
+    }
+    event->accept();
+}
+
+// ── Страницы ─────────────────────────────────────────
 
 void MainWindow::setupEmptyPage()
 {
@@ -123,6 +172,8 @@ void MainWindow::setupTablePage()
     m_stack->addWidget(page);
 }
 
+// ── Диалоги ──────────────────────────────────────────
+
 void MainWindow::showAddFilesDialog()
 {
     StartupDialog dlg(this);
@@ -140,6 +191,7 @@ void MainWindow::showAddFilesDialog()
 
     populateFileList();
     m_stack->setCurrentIndex(1);
+    m_startAction->setEnabled(!m_filePaths.isEmpty());
 }
 
 void MainWindow::removeSelectedFiles()
@@ -153,6 +205,7 @@ void MainWindow::removeSelectedFiles()
         m_stack->setCurrentIndex(0);
         statusBar()->showMessage(tr("Файлы не выбраны"));
         m_removeAction->setEnabled(false);
+        m_startAction->setEnabled(false);
     } else {
         populateFileList();
     }
@@ -179,6 +232,127 @@ void MainWindow::showSettingsDialog()
     s.setValue("settings/pollInterval", m_pollInterval);
     s.setValue("settings/xorKey", m_xorKey);
     s.setValue("settings/deleteAfterProcessing", m_deleteAfterProcessing);
+}
+
+// ── Обработка файлов ─────────────────────────────────
+
+void MainWindow::startProcessing()
+{
+    if (m_filePaths.isEmpty())
+        return;
+
+    if (m_outputPath.isEmpty()) {
+        QMessageBox::warning(this, tr("Ошибка"),
+            tr("Не указан путь для сохранения результатов.\n"
+               "Задайте его в меню Настройки."));
+        return;
+    }
+
+    QDir outDir(m_outputPath);
+    if (!outDir.exists()) {
+        QMessageBox::warning(this, tr("Ошибка"),
+            tr("Указанная директория не существует:\n%1").arg(m_outputPath));
+        return;
+    }
+
+    if (m_xorKey.size() != 8) {
+        QMessageBox::warning(this, tr("Ошибка"),
+            tr("XOR-ключ должен быть 8 байт (16 hex-символов).\n"
+               "Задайте его в меню Настройки."));
+        return;
+    }
+
+    setProcessingEnabled(false);
+
+    m_progressBar->setValue(0);
+    m_progressBar->setVisible(true);
+    statusBar()->showMessage(tr("Подготовка..."));
+
+    m_workerThread = new QThread(this);
+    m_processor = new FileProcessor(m_filePaths, m_outputPath, m_xorKey,
+                                     m_onConflictMode, m_deleteAfterProcessing);
+    m_processor->moveToThread(m_workerThread);
+
+    connect(m_workerThread, &QThread::started, m_processor, &FileProcessor::process);
+    connect(m_processor, &FileProcessor::fileProgress,
+            this, &MainWindow::onFileProgress);
+    connect(m_processor, &FileProcessor::fileCompleted,
+            this, &MainWindow::onFileCompleted);
+    connect(m_processor, &FileProcessor::allCompleted,
+            this, &MainWindow::onAllCompleted);
+    connect(m_processor, &FileProcessor::error,
+            this, &MainWindow::onProcessingError);
+
+    connect(m_processor, &FileProcessor::allCompleted,
+            m_workerThread, &QThread::quit);
+    connect(m_processor, &FileProcessor::allCompleted,
+            m_processor, &QObject::deleteLater);
+    connect(m_workerThread, &QThread::finished,
+            m_workerThread, &QObject::deleteLater);
+
+    m_pauseAction->setText(tr("⏸ Пауза"));
+    m_pauseAction->setEnabled(true);
+
+    m_workerThread->start();
+}
+
+void MainWindow::togglePause()
+{
+    if (!m_processor)
+        return;
+
+    if (m_pauseAction->text() == tr("⏸ Пауза")) {
+        m_processor->pause();
+        m_pauseAction->setText(tr("▶ Продолжить"));
+        statusBar()->showMessage(tr("Обработка приостановлена"));
+    } else {
+        m_processor->resume();
+        m_pauseAction->setText(tr("⏸ Пауза"));
+        statusBar()->showMessage(tr("Обработка возобновлена"));
+    }
+}
+
+// ── Слоты прогресса ──────────────────────────────────
+
+void MainWindow::onFileProgress(const QString &fileName, qint64 current, qint64 total)
+{
+    if (total > 0) {
+        int pct = static_cast<int>(current * 100 / total);
+        m_progressBar->setValue(pct);
+    }
+    statusBar()->showMessage(tr("Обработка: %1 — %2 / %3")
+        .arg(fileName, formatSize(current), formatSize(total)));
+}
+
+void MainWindow::onFileCompleted(const QString &fileName)
+{
+    statusBar()->showMessage(tr("Готово: %1").arg(fileName));
+}
+
+void MainWindow::onAllCompleted()
+{
+    m_progressBar->setVisible(false);
+    m_progressBar->setValue(0);
+    m_processor = nullptr;
+    m_workerThread = nullptr;
+    setProcessingEnabled(true);
+    statusBar()->showMessage(tr("Обработка завершена"), 5000);
+}
+
+void MainWindow::onProcessingError(const QString &message)
+{
+    statusBar()->showMessage(message);
+}
+
+// ── Вспомогательное ──────────────────────────────────
+
+void MainWindow::setProcessingEnabled(bool enabled)
+{
+    m_addAction->setEnabled(enabled);
+    m_removeAction->setEnabled(enabled && !m_table->selectedItems().isEmpty());
+    m_settingsAction->setEnabled(enabled);
+    m_startAction->setEnabled(enabled && !m_filePaths.isEmpty());
+    m_pauseAction->setEnabled(!enabled);
 }
 
 void MainWindow::populateFileList()

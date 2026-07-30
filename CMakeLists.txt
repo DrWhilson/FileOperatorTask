@@ -23,6 +23,8 @@ set(PROJECT_SOURCES
         startupdialog.h
         settingsdialog.cpp
         settingsdialog.h
+        fileprocessor.cpp
+        fileprocessor.h
         ${TS_FILES}
 )
 
