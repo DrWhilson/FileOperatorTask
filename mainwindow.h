@@ -43,6 +43,7 @@ private slots:
     void onPollTimer();
 
     void onFileProgress(const QString &fileName, qint64 current, qint64 total);
+    void onOverallProgress(int filesDone, int filesTotal);
     void onFileCompleted(const QString &fileName);
     void onAllCompleted();
     void onProcessingError(const QString &message);

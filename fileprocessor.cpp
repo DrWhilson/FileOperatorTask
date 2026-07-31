@@ -6,8 +6,10 @@
 #include <QMutex>
 #include <QWaitCondition>
 #include <QAtomicInt>
+#include <QElapsedTimer>
 
 static constexpr qint64 CHUNK_SIZE = 65536; // 64 KB
+static constexpr qint64 TICK_MS = 100;      // не чаще одного прогресса в 100 мс
 
 FileProcessor::FileProcessor(const QStringList &inputFiles, const QString &outputDir,
                              const QByteArray &xorKey, const QString &conflictMode,
@@ -69,6 +71,13 @@ void FileProcessor::process()
         const qint64 fileSize = fi.size();
         qint64 totalRead = 0;
 
+        // Прогресс шлём не чаще одного раза в 100 мс: на больших файлах
+        // (порядка десятков ГБ) без троттлинга очередь событий GUI-потока
+        // переполняется и интерфейс начинает заметно подтормаживать.
+        QElapsedTimer progressTimer;
+        progressTimer.start();
+        qint64 lastProgressMs = 0;
+
         while (true) {
             if (m_cancelled.loadRelaxed())
                 break;
@@ -91,7 +100,11 @@ void FileProcessor::process()
             outFile.write(chunk);
             totalRead += chunk.size();
 
-            emit fileProgress(fi.fileName(), totalRead, fileSize);
+            const qint64 now = progressTimer.elapsed();
+            if (now - lastProgressMs >= TICK_MS) {
+                emit fileProgress(fi.fileName(), totalRead, fileSize);
+                lastProgressMs = now;
+            }
         }
 
         inFile.close();
@@ -102,6 +115,9 @@ void FileProcessor::process()
             emit fileProgress(fi.fileName(), 0, fileSize);
             break;
         }
+
+        // Гарантируем, что прогресс достигнет 100%
+        emit fileProgress(fi.fileName(), fileSize, fileSize);
 
         emit fileCompleted(fi.fileName());
         emit overallProgress(fileIdx + 1, m_inputFiles.size());

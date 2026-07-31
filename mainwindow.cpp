@@ -21,6 +21,7 @@
 #include <QCloseEvent>
 #include <QMessageBox>
 #include <QDir>
+#include <QCoreApplication>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -112,7 +113,15 @@ void MainWindow::closeEvent(QCloseEvent *event)
         if (m_processor)
             m_processor->cancel();
         m_workerThread->quit();
-        m_workerThread->wait(5000);
+
+        // Ждём завершения воркера, продолжая обрабатывать события GUI.
+        // Фиксированный wait(5000) опасен: если поток не успел завершиться,
+        // событие всё равно принимается и QThread разрушается «на ходу».
+        while (m_workerThread->isRunning()) {
+            if (m_workerThread->wait(50))
+                break;
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        }
     }
     event->accept();
 }
@@ -269,6 +278,8 @@ void MainWindow::runProcessor()
     connect(m_workerThread, &QThread::started, m_processor, &FileProcessor::process);
     connect(m_processor, &FileProcessor::fileProgress,
             this, &MainWindow::onFileProgress);
+    connect(m_processor, &FileProcessor::overallProgress,
+            this, &MainWindow::onOverallProgress);
     connect(m_processor, &FileProcessor::fileCompleted,
             this, &MainWindow::onFileCompleted);
     connect(m_processor, &FileProcessor::allCompleted,
@@ -388,6 +399,14 @@ void MainWindow::onFileProgress(const QString &fileName, qint64 current, qint64 
     }
     statusBar()->showMessage(tr("Обработка: %1 — %2 / %3")
         .arg(fileName, formatSize(current), formatSize(total)));
+}
+
+void MainWindow::onOverallProgress(int filesDone, int filesTotal)
+{
+    if (filesTotal > 0) {
+        int pct = static_cast<int>(filesDone * 100 / filesTotal);
+        m_progressBar->setValue(pct);
+    }
 }
 
 void MainWindow::onFileCompleted(const QString &fileName)
