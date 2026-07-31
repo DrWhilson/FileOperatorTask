@@ -29,6 +29,8 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
 
+    static QString formatSize(qint64 bytes);
+
 protected:
     void closeEvent(QCloseEvent *event) override;
 
@@ -51,7 +53,6 @@ private:
     void populateFileList();
     void setProcessingEnabled(bool enabled);
     void runProcessor();
-    static QString formatSize(qint64 bytes);
 
     Ui::MainWindow *ui;
     QStackedWidget *m_stack;
