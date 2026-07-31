@@ -19,6 +19,12 @@ set(PROJECT_SOURCES
         mainwindow.cpp
         mainwindow.h
         mainwindow.ui
+        startupdialog.cpp
+        startupdialog.h
+        settingsdialog.cpp
+        settingsdialog.h
+        fileprocessor.cpp
+        fileprocessor.h
         ${TS_FILES}
 )
 
@@ -64,6 +70,14 @@ set_target_properties(FileOperatorTask PROPERTIES
     MACOSX_BUNDLE TRUE
     WIN32_EXECUTABLE TRUE
 )
+
+option(BUILD_TESTS "Build tests" ON)
+
+if(BUILD_TESTS)
+    enable_testing()
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    add_subdirectory(tests)
+endif()
 
 include(GNUInstallDirs)
 install(TARGETS FileOperatorTask
