@@ -129,7 +129,7 @@ void FileProcessor::process()
     if (!m_cancelled.loadRelaxed())
         emit allCompleted();
     else
-        emit error(tr("Обработка прервана пользователем"));
+        emit cancelled();
 }
 
 void FileProcessor::pause()
