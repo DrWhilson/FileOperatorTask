@@ -43,8 +43,10 @@ private slots:
     void onPollTimer();
 
     void onFileProgress(const QString &fileName, qint64 current, qint64 total);
+    void onOverallProgress(int filesDone, int filesTotal);
     void onFileCompleted(const QString &fileName);
     void onAllCompleted();
+    void onProcessingCancelled();
     void onProcessingError(const QString &message);
 
 private:
@@ -81,6 +83,10 @@ private:
     int m_pollInterval;
     QByteArray m_xorKey;
     bool m_deleteAfterProcessing;
+
+    // Счётчики общего прогресса
+    int m_filesDone;
+    int m_filesTotal;
 };
 
 #endif

@@ -30,6 +30,7 @@ signals:
     void overallProgress(int filesDone, int filesTotal);
     void fileCompleted(const QString &fileName);
     void allCompleted();
+    void cancelled();
     void error(const QString &message);
 
 private:

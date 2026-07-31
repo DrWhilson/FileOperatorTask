@@ -120,11 +120,11 @@ void TestFileProcessor::cancelProcessing()
     auto *processor = new FileProcessor({input}, m_outputDir, m_xorKey, "overwrite", false);
     processor->moveToThread(thread);
 
-    bool gotError = false;
-    connect(processor, &FileProcessor::error, this,
-            [&gotError](const QString &) { gotError = true; });
+    bool gotCancelled = false;
+    connect(processor, &FileProcessor::cancelled, this,
+            [&gotCancelled]() { gotCancelled = true; });
     connect(thread, &QThread::started, processor, &FileProcessor::process);
-    connect(processor, &FileProcessor::error, thread, &QThread::quit);
+    connect(processor, &FileProcessor::cancelled, thread, &QThread::quit);
 
     thread->start();
 
@@ -133,7 +133,7 @@ void TestFileProcessor::cancelProcessing()
     QTest::qWait(100);        // ждём, пока поток встанет на паузу
     processor->cancel();      // прерываем обработку
 
-    QTRY_VERIFY_WITH_TIMEOUT(gotError, 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(gotCancelled, 10000);
     thread->wait(5000);
 
     // Частичный файл должен быть удалён

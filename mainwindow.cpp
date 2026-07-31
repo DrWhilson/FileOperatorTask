@@ -21,12 +21,15 @@
 #include <QCloseEvent>
 #include <QMessageBox>
 #include <QDir>
+#include <QCoreApplication>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , m_processor(nullptr)
     , m_workerThread(nullptr)
+    , m_filesDone(0)
+    , m_filesTotal(0)
 {
     ui->setupUi(this);
 
@@ -112,7 +115,23 @@ void MainWindow::closeEvent(QCloseEvent *event)
         if (m_processor)
             m_processor->cancel();
         m_workerThread->quit();
-        m_workerThread->wait(5000);
+
+        // Ждём завершения воркера, продолжая обрабатывать события GUI.
+        // Работаем с локальной копией указателя: во время ожидания может
+        // прийти слот onProcessingCancelled()/onAllCompleted(), который
+        // обнулит m_workerThread, а автоудаление QThread (deleteLater)
+        // могло бы уничтожить объект «на ходу».
+        QThread *worker = m_workerThread;
+        m_workerThread = nullptr;
+        m_processor = nullptr;
+        disconnect(worker, &QThread::finished, worker, &QObject::deleteLater);
+
+        while (worker->isRunning()) {
+            if (worker->wait(50))
+                break;
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        }
+        delete worker;
     }
     event->accept();
 }
@@ -269,6 +288,8 @@ void MainWindow::runProcessor()
     connect(m_workerThread, &QThread::started, m_processor, &FileProcessor::process);
     connect(m_processor, &FileProcessor::fileProgress,
             this, &MainWindow::onFileProgress);
+    connect(m_processor, &FileProcessor::overallProgress,
+            this, &MainWindow::onOverallProgress);
     connect(m_processor, &FileProcessor::fileCompleted,
             this, &MainWindow::onFileCompleted);
     connect(m_processor, &FileProcessor::allCompleted,
@@ -280,6 +301,12 @@ void MainWindow::runProcessor()
             m_workerThread, &QThread::quit);
     connect(m_processor, &FileProcessor::allCompleted,
             m_processor, &QObject::deleteLater);
+    connect(m_processor, &FileProcessor::cancelled,
+            m_workerThread, &QThread::quit);
+    connect(m_processor, &FileProcessor::cancelled,
+            m_processor, &QObject::deleteLater);
+    connect(m_processor, &FileProcessor::cancelled,
+            this, &MainWindow::onProcessingCancelled);
     connect(m_workerThread, &QThread::finished,
             m_workerThread, &QObject::deleteLater);
 
@@ -382,12 +409,20 @@ void MainWindow::onPollTimer()
 
 void MainWindow::onFileProgress(const QString &fileName, qint64 current, qint64 total)
 {
-    if (total > 0) {
-        int pct = static_cast<int>(current * 100 / total);
-        m_progressBar->setValue(pct);
-    }
-    statusBar()->showMessage(tr("Обработка: %1 — %2 / %3")
-        .arg(fileName, formatSize(current), formatSize(total)));
+    if (total > 0)
+        m_progressBar->setValue(static_cast<int>(current * 100 / total));
+
+    const QString overall = (m_filesTotal > 0)
+        ? tr("Файл %1 из %2 — ").arg(m_filesDone + 1).arg(m_filesTotal)
+        : QString();
+    statusBar()->showMessage(tr("Обработка: %1%2 — %3 / %4")
+        .arg(overall, fileName, formatSize(current), formatSize(total)));
+}
+
+void MainWindow::onOverallProgress(int filesDone, int filesTotal)
+{
+    m_filesDone = filesDone;
+    m_filesTotal = filesTotal;
 }
 
 void MainWindow::onFileCompleted(const QString &fileName)
@@ -401,6 +436,8 @@ void MainWindow::onAllCompleted()
     m_progressBar->setValue(0);
     m_processor = nullptr;
     m_workerThread = nullptr;
+    m_filesDone = 0;
+    m_filesTotal = 0;
 
     if (m_pollTimer->isActive()) {
         // Таймер продолжает работать, ждём новых файлов
@@ -414,6 +451,20 @@ void MainWindow::onAllCompleted()
         setProcessingEnabled(true);
         statusBar()->showMessage(tr("Обработка завершена"), 5000);
     }
+}
+
+void MainWindow::onProcessingCancelled()
+{
+    m_progressBar->setVisible(false);
+    m_progressBar->setValue(0);
+    m_processor = nullptr;
+    m_workerThread = nullptr;
+    m_filesDone = 0;
+    m_filesTotal = 0;
+
+    setProcessingEnabled(true);
+    m_startAction->setText(tr("▶ Старт"));
+    statusBar()->showMessage(tr("Обработка прервана"), 5000);
 }
 
 void MainWindow::onProcessingError(const QString &message)
